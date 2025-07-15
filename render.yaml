@@ -1,0 +1,112 @@
+# 🛡️ AI-Powered Cybersecurity Risk Simulation Platform
+# Render.com Deployment Configuration
+# Author: IRFAN AHMMED
+
+services:
+  # Backend API Service
+  - type: web
+    name: cybersec-backend
+    env: node
+    plan: starter
+    buildCommand: npm install && cd backend && npm install
+    startCommand: node backend/src/app.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: MONGODB_URI
+        fromDatabase:
+          name: cybersec-mongodb
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: cybersec-redis
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: CORS_ORIGIN
+        fromService:
+          type: web
+          name: cybersec-frontend
+          property: url
+
+  # Frontend React App
+  - type: web
+    name: cybersec-frontend
+    env: static
+    plan: starter
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: ./frontend/build
+    envVars:
+      - key: REACT_APP_API_URL
+        fromService:
+          type: web
+          name: cybersec-backend
+          property: url
+      - key: REACT_APP_ML_SERVICE_URL
+        fromService:
+          type: web
+          name: cybersec-ml-service
+          property: url
+
+  # ML/AI Service
+  - type: web
+    name: cybersec-ml-service
+    env: python
+    plan: starter
+    buildCommand: cd ml-service && pip install -r requirements.txt
+    startCommand: cd ml-service && uvicorn main:app --host 0.0.0.0 --port 8000
+    healthCheckPath: /health
+    envVars:
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: cybersec-redis
+          property: connectionString
+      - key: MONGODB_URI
+        fromDatabase:
+          name: cybersec-mongodb
+          property: connectionString
+
+  # Background Job Worker
+  - type: worker
+    name: cybersec-worker
+    env: node
+    plan: starter
+    buildCommand: npm install && cd backend && npm install
+    startCommand: node backend/src/workers/jobProcessor.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        fromDatabase:
+          name: cybersec-mongodb
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: cybersec-redis
+          property: connectionString
+      - key: ML_SERVICE_URL
+        fromService:
+          type: web
+          name: cybersec-ml-service
+          property: url
+
+databases:
+  # MongoDB Database
+  - name: cybersec-mongodb
+    databaseName: cybersec_platform
+    user: cybersec_user
+    plan: starter
+
+  # Redis Cache & Queue
+  - name: cybersec-redis
+    plan: starter
